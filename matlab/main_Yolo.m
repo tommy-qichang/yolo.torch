@@ -8,8 +8,8 @@ pptlist_test = importdata('newlist_test.data','\n');
 
 % imgWidth = 512;
 % imgHeight = 549;
-resizeW = 480;
-resizeH = 480;
+resizeW = 448;
+resizeH = 448;
 savePrefix = '0705';
 
 trDataPath = strcat('results/img_' , savePrefix);
@@ -19,9 +19,9 @@ teLabelPath = strcat('results/testlabel_' , savePrefix);
 
 
 genData(pptlist,trDataPath,trLabelPath);
-
+fprintf('%s','finish gen training data...');
 genData(pptlist_test,teDataPath,teLabelPath);
-
+fprintf('%s','finish gen testing data...');
 
 
 function genData(pptlist, dataPath,labelPath)
