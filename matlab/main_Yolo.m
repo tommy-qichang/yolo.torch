@@ -8,9 +8,9 @@ pptlist_test = importdata('newlist_test.data','\n');
 
 % imgWidth = 512;
 % imgHeight = 549;
-resizeW = 480;
-resizeH = 480;
-savePrefix = '0705';
+resizeW = 448;
+resizeH = 448;
+savePrefix = '0712';
 
 trDataPath = strcat('results/img_' , savePrefix);
 trLabelPath = strcat('results/label_' , savePrefix);
@@ -19,19 +19,25 @@ teLabelPath = strcat('results/testlabel_' , savePrefix);
 
 
 genData(pptlist,trDataPath,trLabelPath);
-
+fprintf('%s','finish gen training data... \n');
 genData(pptlist_test,teDataPath,teLabelPath);
-
+fprintf('%s','finish gen testing data... \n');
 
 
 function genData(pptlist, dataPath,labelPath)
     for i=1:size(pptlist,1)
         imageName = pptlist(i);
-        fprintf('data:start crop image: %s\n',strcat(baseUrl,'ppt_',char(imageName)));
+        fprintf('data:start crop image: %s \n',strcat(baseUrl,'ppt_',char(imageName)));
         
         str = urlread(strcat(baseUrl,'ppt_',char(imageName)));
         
         data = JSON.parse(str);
+        try
+            fprintf('%d,%d \n',size(data.resources,1),size(data.resources,2));
+        catch
+            fprintf('error \n')
+        end
+        
         resources = data.resources;
         for j=1:size(resources,2)
             ceil = cell2mat(resources(j));
@@ -68,6 +74,9 @@ function genData(pptlist, dataPath,labelPath)
                 ymax = round(ymin + height-1);
                 x = (xmin+xmax)/2;
                 y = (ymin+ymax)/2;
+                %fprintf('img rul:%s \n',url);
+                %fprintf('x:%d, y:%d, w:%d, h:%d \n',x,y,width,height);
+                
 
                 relativeX = x/imgW;
                 relativeY = y/imgH;
@@ -81,28 +90,32 @@ function genData(pptlist, dataPath,labelPath)
 %                 file = fopen(strcat(trLabelPath,'/',publicId,'.txt'),'w');
 %                 fprintf(file,'1 %1.5f %1.5f %1.5f %1.5f',relativeX,relativeY,relativeW,relativeH);
 %                 fclose(file);
+                target = zeros(1,7,7,6);
+                target(:,:,:,5) = 1;
                 
+                cellX = floor(relativeX * 7);
+                cellY = floor(relativeY * 7);
+                cellRelativeX = (relativeX * 7) - cellX;
+                cellRelativeY = (relativeY * 7) - cellY;
+                %fprintf('after: cellX:%d, cellY:%d, x:%d, y:%d, w:%d, h:%d \n',cellX+1,cellY+1,cellRelativeX,cellRelativeY, sqrt(relativeW),  sqrt(relativeH) )
+                target(1,cellX+1,cellY+1,:)= [cellRelativeX, cellRelativeY, sqrt(relativeW), sqrt(relativeH), 0 ,1];
                 
-                labelLine = zeros(1,5);
-                labelLine(1) = 1;
-                labelLine(2) = relativeX;
-                labelLine(3) = relativeY;
-                labelLine(4) = relativeW;
-                labelLine(5) = relativeH;
                 if exist('imagesLabel','var')
-                    imagesLabel = [imagesLabel;labelLine];
+                    imagesLabel = [imagesLabel;target];
                     
                 else
-                    imagesLabel = labelLine;
+                    imagesLabel = target;
                 end
             
             else
+                emptyLabel = zeros(1,7,7,6);
+                emptyLabel(1,:,:,5) = 1;
                 
                 if exist('imagesLabel','var')
-                    imagesLabel = [imagesLabel;zeros(1,5)];
+                    imagesLabel = [imagesLabel;emptyLabel];
                     
                 else
-                    imagesLabel = zeros(1,5);
+                    imagesLabel = emptyLabel;
                 end
                 
                 
