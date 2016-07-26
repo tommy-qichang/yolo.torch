@@ -18,11 +18,11 @@ Provider = class('Provider');
 function Provider:__init(trainSize, testSize)
     print '==> load dataset into trainData/testData'
 
-    allImages = mattorch.load('matlab/results/img_0717_1x1.mat');
-    allImagesWeight = mattorch.load('matlab/results/label_0717_1x1.mat');
+    allImages = mattorch.load('matlab/results/img_0721_1x1.mat');
+    allImagesWeight = mattorch.load('matlab/results/label_0721_1x1.mat');
     print '==> finish load train data, start load test data...';
-    testImages = mattorch.load('matlab/results/testimg_0717_1x1.mat');
-    testImagesWeight = mattorch.load('matlab/results/testlabel_0717_1x1.mat');
+    testImages = mattorch.load('matlab/results/testimg_0721_1x1.mat');
+    testImagesWeight = mattorch.load('matlab/results/testlabel_0721_1x1.mat');
 
     allImages.trData = allImages.imagesList:t();
     allImagesWeight.trWeight = allImagesWeight.imagesLabel:transpose(4,1):transpose(2,3);

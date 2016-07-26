@@ -6,9 +6,11 @@ local layer, parent = torch.class('nn.BoxIoU', 'nn.Module')
 function layer:__init()
     parent.__init(self)
 
-    self.area1 = torch.Tensor()
-    self.area2 = torch.Tensor()
-    self.overlap = torch.Tensor()
+    self.area1 = torch.CudaTensor()
+    self.area2 = torch.CudaTensor()
+    self.overlap = torch.CudaTensor()
+    self.output = torch.CudaTensor()
+    self.savedIoUs = torch.CudaTensor()
 end
 
 
@@ -40,11 +42,13 @@ end
 function layer:updateOutput(input)
     local box1 = input[1]
     local box2 = input[2]
+
+    --
     local N, B1, B2 = box1:size(1), box1:size(2), box2:size(2)
     self.area1:cmul(box1[{{}, {}, 3}], box1[{{}, {}, 4}])
     self.area2:cmul(box2[{{}, {}, 3}], box2[{{}, {}, 4}])
-    local area1_expand = self.area1:view(N, B1, 1):expand(N, B1, B2)
-    local area2_expand = self.area2:view(N, 1, B2):expand(N, B1, B2)
+    local area1_expand = self.area1:view(N, B1, 1):expand(N, B1, B2):cuda()
+    local area2_expand = self.area2:view(N, 1, B2):expand(N, B1, B2):cuda()
 
     local convert_boxes = box_utils.xcycwh_to_x1y1x2y2
     local box1_lohi = convert_boxes(box1) -- N x B1 x 4
@@ -69,10 +73,37 @@ function layer:updateOutput(input)
     self.output:add(area2_expand):pow(-1)
     self.output:cmul(intersection)
 
+
+    local savedIoUs = self.savedIoUs;
+    local sIou = nil;
+    if self.output:size(1)==1 then
+        sIou = self.output:reshape(self.output:size(1));
+    else
+
+        sIou = torch.squeeze(self.output)
+    end
+
+--    require('mobdebug').start(nill,8222)
+    if savedIoUs:nDimension() == 0 then
+        self.savedIoUs:mul(sIou,1)
+    else
+        self.savedIoUs = savedIoUs:cat(sIou)
+    end
+
     return self.output
 end
 
 
 function layer:updateGradInput(input, gradOutput)
     error('Not implemented')
+end
+
+function layer:cleanIoUs()
+    self.savedIoUs = torch.CudaTensor();
+end
+
+function layer:avgIoU()
+
+--    require('mobdebug').start(nill,8222);
+    return torch.sum(self.savedIoUs)/self.savedIoUs:nElement();
 end

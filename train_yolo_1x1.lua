@@ -120,7 +120,7 @@ parameters, gradParameters = model:getParameters()
 print('Will save at ' .. opt.save)
 paths.mkdir(opt.save)
 testLogger = optim.Logger(paths.concat(opt.save, 'test.log'))
-testLogger:setNames { 'type 2 error', 'type 1 error' }
+testLogger:setNames { 'train:type 2 error', 'train:type 1 error', 'train:IoU', 'test:type 2 error', 'test:type 1 error', 'test:IoU' }
 testLogger.showPlot = false
 
 ------------------------------------ set criterion---------------------------------------
@@ -131,6 +131,7 @@ print(c.blue '==>' .. ' setting criterion')
 criterion = nn.RegionProposalCriterion(opt.criWeight,opt.bWeight,1,true):cuda();
 --criterion = cudnn.SpatialCrossEntropyCriterion(torch.Tensor{1.006,150}):cuda();
 --criterion = nn.CrossEntropyCriterion(torch.Tensor({1.006,150})):cuda();
+trainConfusion = nil;
 
 confusion = optim.ConfusionMatrix(2);
 
@@ -144,6 +145,8 @@ optimState = {
 }
 
 function train()
+
+    local mod = nn.BoxIoU()
     model:training();
     epoch = epoch or 1;
 
@@ -161,6 +164,10 @@ function train()
     indices[#indices] = nil;
 
 
+
+
+
+
     local tic = torch.tic();
     for t, v in ipairs(indices) do
         xlua.progress(t, #indices)
@@ -169,11 +176,47 @@ function train()
         targets:copy(provider.trainData.labels:index(1, v));
 
 
+        --    Data Augmentation:
+
+        local ifDataAug = torch.rand(1);
+        local da_translate_treshold = 10;
+
+        local bs = inputs:size(1);
+        local translate_mask = torch.randperm(bs):le(bs / 2);
+        for i = 1, inputs:size(1) do
+            if translate_mask[i] == 1 then
+                local offset = torch.rand(2):mul(2):add(-1):mul(da_translate_treshold);
+                inputs[i] = image.translate(inputs[i],offset[1],offset[2]);
+                offset:div(448);
+                targets[i]:narrow(3,1,2):add(offset:cuda());
+
+            end
+        end
+
+        local flip_mask = torch.randperm(bs):le(bs/2);
+        for i = 1, inputs:size(1) do
+            if flip_mask[i] == 1 then
+--                require('mobdebug').start(nill,8222);
+                image.hflip(inputs[i], inputs[i]);
+                if targets[i][1][1][6] == 1 then
+
+                    local x = targets[i][1][1][1];
+                    local ww = targets[i][1][1][3];
+                    local flip_x = 1 - x - math.pow(ww,2);
+                    targets[i][1][1][1] = flip_x;
+                end
+
+            end
+        end
+
+
+
+
         local feval = function(x)
             if x ~= parameters then parameters:copy(x) end
             gradParameters:zero();
 
---            require('mobdebug').start(nill,8222);
+
             outputs = model:cuda():forward(inputs)
 
 --            flatOutput = _flatTensor(outputs);
@@ -228,7 +271,14 @@ function train()
 
 
     print('Train accuracy:', confusion.totalValid * 100)
+
+
+
     print(confusion)
+    print(criterion.overlap:avgIoU())
+    trainConfusion = { confusion.valids[1] ,confusion.valids[2], criterion.overlap:avgIoU() }
+    criterion.overlap:cleanIoUs()
+
 
     confusion:zero()
     epoch = epoch + 1;
@@ -268,6 +318,9 @@ function test()
 
 
         local outputs = model:forward(inputs)
+
+        criterion:forward(outputs:cuda(), targets:cuda())
+
 --        local flatOutput = _flatTensor(outputs);
         local outputsClasses = outputs:reshape(outputs:size(1),1,1,6):narrow(4,5,2);
         local targetClasses = targets:reshape(targets:size(1),1,1,6):narrow(4,6,1);
@@ -303,9 +356,10 @@ function test()
 
     if testLogger then
         paths.mkdir(opt.save)
---        require('mobdebug').start(nill,8222);
-        testLogger:add { confusion.valids[1] ,confusion.valids[2]}
-        testLogger:style { '+-','+-' }
+
+        testLogger:add {trainConfusion[1],trainConfusion[2],trainConfusion[3], confusion.valids[1] ,confusion.valids[2], criterion.overlap:avgIoU() }
+
+        testLogger:style {'+-','+-','+-', '+-','+-','+-' }
         testLogger:plot()
 
         local base64im
@@ -346,6 +400,7 @@ function test()
     end
 
     confusion:zero()
+    criterion.overlap:cleanIoUs()
 end
 
 

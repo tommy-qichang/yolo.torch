@@ -37,13 +37,7 @@ function genData(pptlist, dataPath,labelPath)
         catch
             fprintf('error \n')
         end
-
-        try
-            fprintf('%d,%d \n',size(data.resources,1),size(data.resources,2));
-        catch
-            fprintf('error \n')
-        end
-
+        
         resources = data.resources;
         for j=1:size(resources,2)
             ceil = cell2mat(resources(j));
@@ -82,7 +76,7 @@ function genData(pptlist, dataPath,labelPath)
                 y = (ymin+ymax)/2;
                 %fprintf('img rul:%s \n',url);
                 %fprintf('x:%d, y:%d, w:%d, h:%d \n',x,y,width,height);
-
+                
 
                 relativeX = x/imgW;
                 relativeY = y/imgH;
@@ -98,14 +92,14 @@ function genData(pptlist, dataPath,labelPath)
 %                 fclose(file);
                 target = zeros(1,7,7,6);
                 target(:,:,:,5) = 1;
-
+                
                 cellX = floor(relativeX * 7);
                 cellY = floor(relativeY * 7);
                 cellRelativeX = (relativeX * 7) - cellX;
                 cellRelativeY = (relativeY * 7) - cellY;
                 %fprintf('after: cellX:%d, cellY:%d, x:%d, y:%d, w:%d, h:%d \n',cellX+1,cellY+1,cellRelativeX,cellRelativeY, sqrt(relativeW),  sqrt(relativeH) )
                 target(1,cellX+1,cellY+1,:)= [cellRelativeX, cellRelativeY, sqrt(relativeW), sqrt(relativeH), 0 ,1];
-
+                
                 if exist('imagesLabel','var')
                     imagesLabel = [imagesLabel;target];
                     
@@ -116,7 +110,7 @@ function genData(pptlist, dataPath,labelPath)
             else
                 emptyLabel = zeros(1,7,7,6);
                 emptyLabel(1,:,:,5) = 1;
-
+                
                 if exist('imagesLabel','var')
                     imagesLabel = [imagesLabel;emptyLabel];
                     

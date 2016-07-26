@@ -6,6 +6,7 @@
 -- 
 --
 require 'nn'
+require 'BoxIoU'
 RegionProposalCriterion, parent = torch.class('nn.RegionProposalCriterion','nn.Criterion')
 
 -- defult sides:7x7 grid cells for one image.
@@ -46,6 +47,7 @@ function RegionProposalCriterion:__init(weights,bWeights,sides,isCuda)
     end
 
 
+    self.overlap = nn.BoxIoU()
 end
 
 
@@ -55,11 +57,12 @@ end
 --target: Bx(7*7*6) (x,y,\sqrt w,\sqrt h,class1,class2)
 
 
-function RegionProposalCriterion:updateOutput(input, target)
-    _input = input:reshape(input:size(1),self.sides,self.sides,6);
-    _target = target:reshape(input:size(1),self.sides,self.sides,6);
+function RegionProposalCriterion:updateOutput(inputs, targets)
+    local _input = inputs:reshape(inputs:size(1),self.sides,self.sides,6);
+    local _target = targets:reshape(inputs:size(1),self.sides,self.sides,6);
+    local overlap = self.overlap;
 
-    assert( input:nElement() == target:nElement(),
+    assert( inputs:nElement() == targets:nElement(),
         "input and target size mismatch")
 
     self.buffer = self.buffer or _input.new()
@@ -70,7 +73,8 @@ function RegionProposalCriterion:updateOutput(input, target)
     local output,label
     buffer:resizeAs(_input)
 
-    local mask = _target:narrow(4,6,1):eq(1):double()
+    local byteMask = _target:narrow(4,6,1):eq(1);
+    local mask = byteMask:double()
 --    local mask = _target:narrow(4,6,1):eq(1):double()
 --    mask = torch.expand(mask,_input:size())
     mask = torch.expand(mask,_input:narrow(4,1,4):size())
@@ -98,6 +102,23 @@ function RegionProposalCriterion:updateOutput(input, target)
     buffer:narrow(4,5,1):mul(bWeights)
 
 
+
+    byteMask = byteMask:reshape(byteMask:size(1),1):expand(byteMask:size(1),4);
+    local boxes1 = inputs:narrow(2,1,4);
+    local boxes2 = targets:squeeze():narrow(2,1,4);
+
+    boxes1 = boxes1:maskedSelect(byteMask);
+    boxes2 = boxes2:maskedSelect(byteMask);
+    if boxes2:nElement() ~= 0 then
+
+        boxes1 = boxes1:reshape(boxes1:size(1)/4,4);
+        boxes2 = boxes2:reshape(boxes2:size(1)/4,4);
+
+        local iou = overlap:forward({boxes1:reshape(boxes1:size(1),1,boxes1:size(2)), boxes2:reshape(boxes2:size(1),1,boxes2:size(2))}):reshape(boxes1:size(1),self.sides,self.sides,1)
+        self.iou = iou
+    end
+
+
     proposalCost = (torch.sum(buffer:narrow(4,1,4))) / (buffer:narrow(4,1,4):nElement());
 
 
@@ -105,7 +126,7 @@ function RegionProposalCriterion:updateOutput(input, target)
 
     noobjCost = torch.sum(buffer:narrow(4,5,1)) / (mask:narrow(4,5,1):nElement());
 
-    print(('proposalCost:'..proposalCost..', classCost:'..classCost..', noobjCost:'..noobjCost))
+    print(('proposalCost:'..proposalCost..', classCost:'..classCost..', noobjCost:'..noobjCost..', IoU:'..overlap:avgIoU()))
 --    require('mobdebug').start(nill,8222)
 
     output = torch.sum(buffer)
@@ -115,11 +136,11 @@ function RegionProposalCriterion:updateOutput(input, target)
     return self.output
 end
 
-function RegionProposalCriterion:updateGradInput(input, target)
-    _input = input:reshape(input:size(1),self.sides,self.sides,6);
-    _target = target:reshape(input:size(1),self.sides,self.sides,6);
+function RegionProposalCriterion:updateGradInput(inputs, targets)
+    local _input = inputs:reshape(inputs:size(1),self.sides,self.sides,6);
+    local _target = targets:reshape(inputs:size(1),self.sides,self.sides,6);
 
-    assert( input:nElement() == target:nElement(),
+    assert( inputs:nElement() == targets:nElement(),
         "input and target size mismatch")
 
     self.buffer = self.buffer or _input.new()

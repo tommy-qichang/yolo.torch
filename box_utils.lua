@@ -272,10 +272,10 @@ function box_utils.xcycwh_to_x1y1x2y2(boxes)
     local y0 = ret:select(3, 2)
     local y1 = ret:select(3, 4)
 
-    x0:div(torch.add(w,-1), 2.0):mul(-1):add(xc)
-    x1:div(torch.add(w,-1), 2.0):add(xc)
-    y0:div(torch.add(h,-1), 2.0):mul(-1):add(yc)
-    y1:div(torch.add(h,-1), 2.0):add(yc)
+    x0:div(w, 2.0):mul(-1):add(xc)
+    x1:div(w, 2.0):add(xc)
+    y0:div(h, 2.0):mul(-1):add(yc)
+    y1:div(h, 2.0):add(yc)
 
     if not minibatch then
         ret = ret:view(boxes:size(2), 4)
